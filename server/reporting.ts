@@ -16,7 +16,9 @@ export interface SessionWithBookings {
 }
 
 // Sessions for a single day, with booking totals attached via a single
-// grouped query rather than N+1 lookups.
+// grouped query rather than N+1 lookups. Only confirmed bookings count; the
+// status check sits in the JOIN so sessions with no confirmed bookings still
+// appear with zero.
 function sessionsWithBookings(
 	db: Database.Database,
 	date: string,
@@ -33,7 +35,8 @@ function sessionsWithBookings(
          COUNT(b.id) AS bookingCount,
          COALESCE(SUM(b.party_size), 0) AS bookedPlaces
        FROM sessions s
-       LEFT JOIN bookings b ON b.session_id = s.id
+       LEFT JOIN bookings b
+         ON b.session_id = s.id AND b.status = 'confirmed'
        WHERE s.date = ?
        GROUP BY s.id
        ORDER BY s.start_time, s.activity`,
@@ -86,7 +89,7 @@ export function headlineStats(
 			`SELECT AVG(b.party_size) AS avgPartySize
        FROM bookings b
        JOIN sessions s ON s.id = b.session_id
-       WHERE s.date = ?`,
+       WHERE s.date = ? AND b.status = 'confirmed'`,
 		)
 		.get(date) as { avgPartySize: number | null };
 
@@ -134,27 +137,45 @@ export interface ActivityTotal {
 	sessionCount: number;
 	bookingCount: number;
 	bookedPlaces: number;
+	totalCapacity: number;
+	fillRatePct: number;
 }
 
 // Per-activity totals for the day, busiest activity (by places booked) first.
+// Bookings are totalled per session before grouping by activity, so each
+// session's capacity is counted once however many bookings it has.
 export function activityTotals(
 	db: Database.Database,
 	date: string,
 ): ActivityTotal[] {
-	return db
+	const rows = db
 		.prepare(
 			`SELECT
          s.activity AS activity,
-         COUNT(DISTINCT s.id) AS sessionCount,
-         COUNT(b.id) AS bookingCount,
-         COALESCE(SUM(b.party_size), 0) AS bookedPlaces
+         COUNT(*) AS sessionCount,
+         COALESCE(SUM(b.bookingCount), 0) AS bookingCount,
+         COALESCE(SUM(b.bookedPlaces), 0) AS bookedPlaces,
+         SUM(s.capacity) AS totalCapacity
        FROM sessions s
-       LEFT JOIN bookings b ON b.session_id = s.id
+       LEFT JOIN (
+         SELECT
+           session_id,
+           COUNT(*) AS bookingCount,
+           SUM(party_size) AS bookedPlaces
+         FROM bookings
+         WHERE status = 'confirmed'
+         GROUP BY session_id
+       ) b ON b.session_id = s.id
        WHERE s.date = ?
        GROUP BY s.activity
        ORDER BY bookedPlaces DESC`,
 		)
-		.all(date) as ActivityTotal[];
+		.all(date) as Omit<ActivityTotal, "fillRatePct">[];
+
+	return rows.map((row) => ({
+		...row,
+		fillRatePct: pct(row.bookedPlaces, row.totalCapacity),
+	}));
 }
 
 export interface BookingListEntry {
