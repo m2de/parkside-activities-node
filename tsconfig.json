@@ -11,6 +11,5 @@
 		"resolveJsonModule": true,
 		"noEmit": true
 	},
-	"include": ["src", "server", "db"],
-	"exclude": ["**/*.test.ts"]
+	"include": ["src", "server", "db"]
 }
