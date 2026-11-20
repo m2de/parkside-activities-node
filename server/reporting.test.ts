@@ -33,6 +33,13 @@ beforeAll(() => {
 	insertSession.run(3, "Pottery", "2026-03-14", "14:00", 90, 10);
 	insertSession.run(4, "Archery", "2026-03-15", "09:00", 60, 12);
 	insertSession.run(5, "Pottery", "2026-03-16", "10:00", 90, 10);
+	// 2026-03-18: the issue's example — three Archery sessions of ten, 24
+	// places sold across several bookings per session — plus a zero-capacity
+	// session with no bookings.
+	insertSession.run(6, "Archery", "2026-03-18", "09:00", 60, 10);
+	insertSession.run(7, "Archery", "2026-03-18", "11:00", 60, 10);
+	insertSession.run(8, "Archery", "2026-03-18", "14:00", 60, 10);
+	insertSession.run(9, "Climbing", "2026-03-18", "10:00", 60, 0);
 
 	const insertBooking = db.prepare(
 		`INSERT INTO bookings (session_id, guest_name, party_size, status, created_at)
@@ -47,6 +54,14 @@ beforeAll(() => {
 	insertBooking.run(3, "Gwen Harris", 2, "confirmed", "2026-03-07T14:00:00Z");
 	insertBooking.run(4, "Huw Idris", 6, "confirmed", "2026-03-08T08:00:00Z");
 	insertBooking.run(5, "Iona Jones", 3, "cancelled", "2026-03-09T10:00:00Z");
+	insertBooking.run(6, "Jack King", 4, "confirmed", "2026-03-10T09:00:00Z");
+	insertBooking.run(6, "Kim Lewis", 4, "confirmed", "2026-03-10T09:05:00Z");
+	insertBooking.run(7, "Liam Moss", 3, "confirmed", "2026-03-10T09:10:00Z");
+	insertBooking.run(7, "Mia Nash", 3, "confirmed", "2026-03-10T09:15:00Z");
+	insertBooking.run(7, "Noah Owen", 2, "confirmed", "2026-03-10T09:20:00Z");
+	insertBooking.run(7, "Olive Park", 2, "cancelled", "2026-03-10T09:25:00Z");
+	insertBooking.run(8, "Pip Quinn", 5, "confirmed", "2026-03-10T09:30:00Z");
+	insertBooking.run(8, "Rhys Stone", 3, "confirmed", "2026-03-10T09:35:00Z");
 });
 
 describe("headlineStats", () => {
@@ -159,18 +174,24 @@ describe("activityTotals", () => {
 				sessionCount: 1,
 				bookingCount: 3,
 				bookedPlaces: 12,
+				totalCapacity: 12,
+				fillRatePct: 100,
 			},
 			{
 				activity: "Aqua Fit",
 				sessionCount: 1,
 				bookingCount: 1,
 				bookedPlaces: 5,
+				totalCapacity: 20,
+				fillRatePct: 25,
 			},
 			{
 				activity: "Pottery",
 				sessionCount: 1,
 				bookingCount: 1,
 				bookedPlaces: 2,
+				totalCapacity: 10,
+				fillRatePct: 20,
 			},
 		]);
 	});
@@ -182,7 +203,44 @@ describe("activityTotals", () => {
 				sessionCount: 1,
 				bookingCount: 0,
 				bookedPlaces: 0,
+				totalCapacity: 10,
+				fillRatePct: 0,
 			},
+		]);
+	});
+
+	it("fills 80% when three sessions of ten sell 24 places across several bookings each", () => {
+		const archery = activityTotals(db, "2026-03-18").find(
+			(a) => a.activity === "Archery",
+		);
+		expect(archery).toEqual({
+			activity: "Archery",
+			sessionCount: 3,
+			bookingCount: 7,
+			bookedPlaces: 24,
+			totalCapacity: 30,
+			fillRatePct: 80,
+		});
+	});
+
+	it("reports a 0% fill rate for an activity with no capacity and no bookings", () => {
+		const climbing = activityTotals(db, "2026-03-18").find(
+			(a) => a.activity === "Climbing",
+		);
+		expect(climbing).toEqual({
+			activity: "Climbing",
+			sessionCount: 1,
+			bookingCount: 0,
+			bookedPlaces: 0,
+			totalCapacity: 0,
+			fillRatePct: 0,
+		});
+	});
+
+	it("keeps the busiest activity by places first", () => {
+		expect(activityTotals(db, "2026-03-18").map((a) => a.activity)).toEqual([
+			"Archery",
+			"Climbing",
 		]);
 	});
 });

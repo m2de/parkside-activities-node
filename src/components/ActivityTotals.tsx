@@ -3,6 +3,8 @@ export interface ActivityTotal {
 	sessionCount: number;
 	bookingCount: number;
 	bookedPlaces: number;
+	totalCapacity: number;
+	fillRatePct: number;
 }
 
 interface Props {
@@ -20,6 +22,8 @@ export default function ActivityTotals({ activities }: Props) {
 						<th>Sessions</th>
 						<th>Bookings</th>
 						<th>Places</th>
+						<th>Capacity</th>
+						<th>Fill rate</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -29,6 +33,8 @@ export default function ActivityTotals({ activities }: Props) {
 							<td>{activity.sessionCount}</td>
 							<td>{activity.bookingCount}</td>
 							<td>{activity.bookedPlaces}</td>
+							<td>{activity.totalCapacity}</td>
+							<td>{activity.fillRatePct}%</td>
 						</tr>
 					))}
 				</tbody>
