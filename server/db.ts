@@ -6,7 +6,32 @@ import Database from "better-sqlite3";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.join(__dirname, "..", "parkside.db");
 
-export const db = new Database(dbPath);
+function openSeededDatabase(): Database.Database {
+	const notSeeded = `Database not seeded: run \`npm run seed\` first (expected ${dbPath}).`;
+
+	// fileMustExist stops us silently creating an empty, table-less file.
+	let database: Database.Database;
+	try {
+		database = new Database(dbPath, { fileMustExist: true });
+	} catch {
+		throw new Error(notSeeded);
+	}
+
+	const tables = database
+		.prepare(
+			`SELECT name FROM sqlite_master
+			 WHERE type = 'table' AND name IN ('sessions', 'bookings')`,
+		)
+		.all();
+	if (tables.length < 2) {
+		database.close();
+		throw new Error(notSeeded);
+	}
+
+	return database;
+}
+
+export const db = openSeededDatabase();
 
 export interface SessionRow {
 	id: number;
