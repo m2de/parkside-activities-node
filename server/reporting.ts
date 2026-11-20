@@ -16,7 +16,9 @@ export interface SessionWithBookings {
 }
 
 // Sessions for a single day, with booking totals attached via a single
-// grouped query rather than N+1 lookups.
+// grouped query rather than N+1 lookups. Only confirmed bookings count; the
+// status check sits in the JOIN so sessions with no confirmed bookings still
+// appear with zero.
 function sessionsWithBookings(
 	db: Database.Database,
 	date: string,
@@ -33,7 +35,8 @@ function sessionsWithBookings(
          COUNT(b.id) AS bookingCount,
          COALESCE(SUM(b.party_size), 0) AS bookedPlaces
        FROM sessions s
-       LEFT JOIN bookings b ON b.session_id = s.id
+       LEFT JOIN bookings b
+         ON b.session_id = s.id AND b.status = 'confirmed'
        WHERE s.date = ?
        GROUP BY s.id
        ORDER BY s.start_time, s.activity`,
@@ -86,7 +89,7 @@ export function headlineStats(
 			`SELECT AVG(b.party_size) AS avgPartySize
        FROM bookings b
        JOIN sessions s ON s.id = b.session_id
-       WHERE s.date = ?`,
+       WHERE s.date = ? AND b.status = 'confirmed'`,
 		)
 		.get(date) as { avgPartySize: number | null };
 
@@ -149,7 +152,8 @@ export function activityTotals(
          COUNT(b.id) AS bookingCount,
          COALESCE(SUM(b.party_size), 0) AS bookedPlaces
        FROM sessions s
-       LEFT JOIN bookings b ON b.session_id = s.id
+       LEFT JOIN bookings b
+         ON b.session_id = s.id AND b.status = 'confirmed'
        WHERE s.date = ?
        GROUP BY s.activity
        ORDER BY bookedPlaces DESC`,
